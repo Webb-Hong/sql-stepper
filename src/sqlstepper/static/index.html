@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Stepper</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232f6fde'/%3E%3Cpath d='M8 9h16M8 16h11M8 23h6' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="side-toggle" title="資料表">☰</button>
+    <div class="brand">SQL Stepper <span class="sub">一步一步看懂 SQL 怎麼執行</span></div>
+    <select id="examples" aria-label="範例查詢"><option value="">載入範例查詢…</option></select>
+    <label class="check" title="在資料庫的副本上執行，INSERT / UPDATE / DELETE 不會真的改到資料">
+      <input type="checkbox" id="sandbox" checked> 試跑模式
+    </label>
+    <button id="theme" title="切換深色 / 淺色">◐</button>
+    <button id="help-btn">說明</button>
+  </header>
+
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="side-head">
+        <h2>資料表</h2>
+        <div class="side-actions">
+          <button id="import-btn" title="CSV、TSV、Parquet、JSON、XLSX、DuckDB、SQLite">匯入檔案</button>
+          <button id="reset-btn" title="刪除所有資料表並重新載入範例">重設範例</button>
+        </div>
+        <input type="file" id="file" hidden
+          accept=".csv,.tsv,.txt,.parquet,.pq,.json,.jsonl,.ndjson,.xlsx,.duckdb,.ddb,.db,.sqlite,.sqlite3">
+      </div>
+      <div id="tables"></div>
+      <div class="drop-hint">把檔案拖到這裡也能匯入。點資料表名稱展開欄位，雙擊插入到編輯器。</div>
+    </aside>
+
+    <main>
+      <section id="editor-pane">
+        <div class="toolbar">
+          <button id="run" class="primary" title="執行並開始播放">▶ 執行<kbd>Ctrl+Enter</kbd></button>
+          <div class="sep"></div>
+          <button id="play" title="繼續播放 / 暫停">⏵ 繼續<kbd>F5</kbd></button>
+          <button id="prev" title="回到上一步">⏮ 上一步</button>
+          <button id="next" title="播放下一步的動畫後暫停">⏭ 下一步<kbd>F10</kbd></button>
+          <button id="row" title="只前進一列">↧ 下一列<kbd>F8</kbd></button>
+          <div class="sep"></div>
+          <label>速度 <input type="range" id="speed" min="1" max="10" value="6"></label>
+          <label title="關閉後每一步直接顯示完整結果"><input type="checkbox" id="animate" checked> 逐列動畫</label>
+          <button id="clear-bp" title="清除所有斷點">清除斷點</button>
+          <span id="status"></span>
+        </div>
+        <div class="editor">
+          <div class="gutter" id="gutter" title="點行號設定斷點（F9）"></div>
+          <div class="code">
+            <div id="line-hl"></div>
+            <pre id="hl" aria-hidden="true"></pre>
+            <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off"
+              aria-label="SQL 編輯器"></textarea>
+          </div>
+        </div>
+      </section>
+      <div id="resizer" title="拖曳調整編輯器高度"></div>
+      <section id="bottom">
+        <nav id="plan" aria-label="執行計畫"></nav>
+        <section id="stage" aria-live="polite"></section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast"></div>
+
+  <dialog id="help">
+    <h2>使用說明</h2>
+    <p>寫好 SQL 按 <b>▶ 執行</b>，左下方的「執行計畫」會依照 SQL <b>實際的執行順序</b>列出每個步驟
+      （FROM → JOIN → WHERE → GROUP BY → HAVING → 視窗函數 → SELECT → DISTINCT → ORDER BY → LIMIT），
+      右邊的舞台會用動畫逐列呈現每一步的中間結果。</p>
+    <h3>斷點</h3>
+    <ul>
+      <li><b>行斷點</b>：點編輯器左側的行號（或把游標放在該行按 F9）。有藍色短線的行代表有對應的步驟。</li>
+      <li><b>步驟斷點</b>：點執行計畫中每一步前面的小圓點。</li>
+      <li>播放到有斷點的步驟時，會在「執行該步驟之前」暫停；接著可以按 <b>↧ 下一列</b> 一列一列看。</li>
+    </ul>
+    <h3>快捷鍵</h3>
+    <table>
+      <tr><td><kbd>Ctrl+Enter</kbd></td><td>執行（重新計算並從頭播放）</td></tr>
+      <tr><td><kbd>F5</kbd></td><td>繼續 / 暫停</td></tr>
+      <tr><td><kbd>F10</kbd></td><td>下一步</td></tr>
+      <tr><td><kbd>F8</kbd></td><td>下一列</td></tr>
+      <tr><td><kbd>F9</kbd></td><td>在游標所在行切換斷點</td></tr>
+    </table>
+    <h3>顏色</h3>
+    <ul>
+      <li>綠色 ✓：條件為 TRUE，保留；紅色 ✗：FALSE，丟棄；黃色 ?：NULL（未知），也會被丟棄。</li>
+      <li>淡黃底：目前這一列是由哪些來源列產生的（暫停時滑鼠移到任一列也會顯示）。</li>
+      <li>左側色條：同一組 / 同一個分區。</li>
+    </ul>
+    <p><b>試跑模式</b>開啟時，每次執行都在資料庫的副本上進行，INSERT / UPDATE / DELETE / CREATE 不會保留。
+      關閉後，修改會真的寫入目前的資料庫。</p>
+    <form method="dialog"><button class="primary">知道了</button></form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
